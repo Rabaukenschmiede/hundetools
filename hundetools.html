@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🐾 Hunde-Tools</title>
+<style>
+  :root {
+    --purple: #7B2D8B; --purple-light: #E8D5F0;
+    --amber: #D4820A; --amber-light: #FFF3CD;
+    --green: #28a745; --green-light: #d4edda;
+    --red: #dc3545; --red-light: #f8d7da;
+    --blue: #2C3E50; --blue-light: #EBF5FB;
+    --gray: #6c757d; --light: #f8f9fa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #f0f2f5; color: #333; }
+  header { background: var(--blue); color: #fff; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 1.4rem; }
+  .tabs { display: flex; background: #fff; border-bottom: 2px solid #ddd; padding: 0 24px; flex-wrap: wrap; }
+  .tab { padding: 12px 20px; cursor: pointer; border-bottom: 3px solid transparent; font-weight: bold; color: var(--gray); transition: .2s; }
+  .tab.active { color: var(--purple); border-color: var(--purple); }
+  .tab:hover:not(.active) { background: var(--light); }
+  .panel { display: none; padding: 20px; max-width: 1400px; margin: 0 auto; }
+  .panel.active { display: block; }
+
+  /* Cards */
+  .card { background: #fff; border-radius: 10px; padding: 18px; margin-bottom: 18px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  .card h3 { font-size: 1rem; margin-bottom: 14px; color: var(--blue); border-bottom: 1px solid #eee; padding-bottom: 8px; }
+
+  /* Buttons */
+  .btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: .88rem; font-weight: bold; transition: .15s; }
+  .btn-primary { background: var(--purple); color: #fff; }
+  .btn-primary:hover { background: #5e2270; }
+  .btn-success { background: var(--green); color: #fff; }
+  .btn-success:hover { background: #218838; }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-danger:hover { background: #c82333; }
+  .btn-secondary { background: #6c757d; color: #fff; }
+  .btn-secondary:hover { background: #545b62; }
+  .btn-outline { background: #fff; border: 1.5px solid var(--purple); color: var(--purple); }
+  .btn-outline:hover { background: var(--purple-light); }
+
+  /* Forms */
+  .form-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 10px; }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-group label { font-size: .8rem; color: var(--gray); font-weight: bold; }
+  input, select { padding: 7px 10px; border: 1.5px solid #ccc; border-radius: 6px; font-size: .88rem; }
+  input:focus, select:focus { outline: none; border-color: var(--purple); }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  th { background: var(--blue); color: #fff; padding: 9px 10px; text-align: left; }
+  td { padding: 8px 10px; border-bottom: 1px solid #eee; vertical-align: middle; }
+  tr:nth-child(even) td { background: #fafafa; }
+  tr:hover td { background: var(--blue-light); }
+  .actions { display: flex; gap: 6px; }
+
+  /* Status badges */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: .78rem; font-weight: bold; }
+  .badge-bezahlt { background: var(--green-light); color: var(--green); }
+  .badge-teilw { background: var(--amber-light); color: var(--amber); }
+  .badge-offen { background: var(--red-light); color: var(--red); }
+
+  /* Calendar */
+  #cal-grid { overflow-x: auto; }
+  .cal-table { border-collapse: collapse; font-size: .75rem; min-width: 600px; }
+  .cal-table th, .cal-table td { border: 1px solid #ddd; padding: 2px 4px; text-align: center; min-width: 28px; }
+  .cal-table th { background: var(--blue); color: #fff; position: sticky; top: 0; }
+  .cal-table .dog-label { background: #f8f9fa; font-weight: bold; text-align: left; padding: 4px 8px; white-space: nowrap; position: sticky; left: 0; z-index: 1; }
+  .cal-table .today { background: #fff3cd !important; }
+  .cal-table .weekend { background: #f5f5f5; }
+
+  /* Metrics */
+  .metrics { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .metric { background: #fff; border-radius: 8px; padding: 12px 18px; flex: 1; min-width: 130px; box-shadow: 0 1px 3px rgba(0,0,0,.08); text-align: center; }
+  .metric .val { font-size: 1.6rem; font-weight: bold; }
+  .metric .lbl { font-size: .78rem; color: var(--gray); }
+
+  /* Month filter */
+  .month-section { margin-bottom: 20px; }
+  .month-header { background: var(--blue); color: #fff; padding: 8px 14px; border-radius: 6px 6px 0 0; font-weight: bold; }
+
+  /* Toast */
+  #toast { position: fixed; bottom: 24px; right: 24px; background: #333; color: #fff; padding: 12px 20px; border-radius: 8px; font-size: .9rem; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 9999; }
+  #toast.show { opacity: 1; }
+
+  /* Training */
+  .training-grid { overflow-x: auto; }
+  .t-table { border-collapse: collapse; font-size: .82rem; min-width: 900px; }
+  .t-table th { background: var(--blue); color: #fff; padding: 8px 6px; text-align: center; font-size: .78rem; }
+  .t-table td { border: 1px solid #eee; padding: 4px 5px; }
+  .t-table .name-cell { font-weight: bold; min-width: 150px; padding: 4px 8px; }
+  .t-table .te-cell input { width: 100%; border: none; background: transparent; font-size: .78rem; text-align: center; padding: 2px; }
+  .t-table .te-cell input:focus { background: var(--purple-light); outline: none; border-radius: 3px; }
+  .t-table .done-cell { background: var(--purple-light); color: var(--purple); font-weight: bold; text-align: center; }
+  .t-table .open-cell { background: var(--amber-light); color: var(--amber); font-weight: bold; text-align: center; }
+  .t-table .sum-row td { background: var(--blue); color: #fff; font-weight: bold; text-align: center; }
+  .prog-bar { height: 6px; background: #eee; border-radius: 3px; margin-top: 2px; }
+  .prog-fill { height: 100%; background: var(--purple); border-radius: 3px; transition: width .3s; }
+
+  .io-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+  @media (max-width: 600px) {
+    .form-row { flex-direction: column; }
+    .metrics { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span style="font-size:2rem">🐾</span>
+  <div>
+    <h1>Hunde-Tools</h1>
+    <div style="font-size:.8rem;opacity:.7">Gasthunde · Abrechnung · Training — Daten werden lokal gespeichert</div>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('kalender')">📅 Kalender</div>
+  <div class="tab" onclick="showTab('abrechnung')">💶 Abrechnung</div>
+  <div class="tab" onclick="showTab('monatsabrechnung')">📋 Monatsabrechnung</div>
+  <div class="tab" onclick="showTab('training')">🎓 Training</div>
+</div>
+
+<!-- ===================== KALENDER ===================== -->
+<div class="panel active" id="panel-kalender">
+  <div class="card">
+    <h3>Neuen Gasthund eintragen</h3>
+    <div class="form-row">
+      <div class="form-group"><label>Name</label><input id="g-name" placeholder="Bello" style="width:130px"></div>
+      <div class="form-group"><label>Rasse</label><input id="g-rasse" placeholder="optional" style="width:130px"></div>
+      <div class="form-group"><label>Einzug</label><input id="g-ein" type="date"></div>
+      <div class="form-group"><label>Auszug</label><input id="g-aus" type="date"></div>
+      <div class="form-group"><label>Tagessatz (€)</label><input id="g-rate" type="number" min="0" step="0.5" value="25" style="width:90px"></div>
+      <div class="form-group"><label>Farbe</label><input id="g-farbe" type="color" value="#7B2D8B" style="width:60px;height:36px;padding:2px"></div>
+      <div class="form-group"><label>&nbsp;</label><button class="btn btn-primary" onclick="addGasthund()">+ Hinzufügen</button></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Aktuelle Gasthunde</h3>
+    <div id="dog-list">
+      <p style="color:var(--gray);font-style:italic">Noch keine Gasthunde eingetragen.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Kalender</h3>
+    <div class="form-row" style="margin-bottom:12px">
+      <div class="form-group"><label>Monat</label>
+        <input id="cal-month" type="month" onchange="renderCalendar()">
+      </div>
+      <button class="btn btn-outline" onclick="prevMonth()">◀ Vorher</button>
+      <button class="btn btn-outline" onclick="nextMonth()">Nächster ▶</button>
+    </div>
+    <div id="cal-grid"></div>
+  </div>
+</div>
+
+<!-- ===================== ABRECHNUNG ===================== -->
+<div class="panel" id="panel-abrechnung">
+  <div class="metrics" id="metrics"></div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0">Abrechnungstabelle</h3>
+    </div>
+    <div style="overflow-x:auto">
+      <table id="abr-table">
+        <thead><tr>
+          <th>Name</th><th>Rasse</th><th>Einzug</th><th>Auszug</th>
+          <th>Tage</th><th>Tagessatz</th><th>Gesamtbetrag</th>
+          <th>Bezahlt (€)</th><th>Restbetrag</th><th>Status</th><th>Aktionen</th>
+        </tr></thead>
+        <tbody id="abr-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MONATSABRECHNUNG ===================== -->
+<div class="panel" id="panel-monatsabrechnung">
+  <div class="card">
+    <div class="form-row" style="margin-bottom:0">
+      <div class="form-group">
+        <label>Monat filtern (Auszugsdatum)</label>
+        <select id="monat-filter" onchange="renderMonatsabrechnung()">
+          <option value="all">Alle Monate</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <div id="monats-content"></div>
+</div>
+
+<!-- ===================== TRAINING ===================== -->
+<div class="panel" id="panel-training">
+  <div class="card">
+    <h3>Neuen Kunden hinzufügen</h3>
+    <div class="form-row">
+      <div class="form-group"><label>Kundenname</label><input id="t-name" placeholder="Max Mustermann" style="width:200px"></div>
+      <div class="form-group"><label>&nbsp;</label><button class="btn btn-primary" onclick="addTrainingClient()">+ Hinzufügen</button></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Trainingseinheiten</h3>
+    <p style="font-size:.82rem;color:var(--gray);margin-bottom:10px">Daten im Format TT.MM.JJJJ eintragen. Abgeschlossen und Offen werden automatisch berechnet.</p>
+    <div class="training-grid">
+      <table class="t-table" id="t-table">
+        <thead><tr>
+          <th style="text-align:left;min-width:150px">Kundenname</th>
+          <th>TE 1</th><th>TE 2</th><th>TE 3</th><th>TE 4</th><th>TE 5</th><th>TE 6</th>
+          <th>TE 7</th><th>TE 8</th><th>TE 9</th><th>TE 10</th><th>TE 11</th><th>TE 12</th>
+          <th style="background:#5e2270">Abgeschl.</th>
+          <th style="background:#a06010">Offen</th>
+          <th>Aktionen</th>
+        </tr></thead>
+        <tbody id="t-body"></tbody>
+        <tfoot id="t-foot"></tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Export/Import floating bar -->
+<div style="position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #eee;padding:10px 24px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;z-index:100;box-shadow:0 -2px 8px rgba(0,0,0,.1)">
+  <span style="font-size:.82rem;color:var(--gray);font-weight:bold">💾 Daten:</span>
+  <button class="btn btn-success" onclick="exportData()">⬇ Exportieren (JSON)</button>
+  <label class="btn btn-outline" style="cursor:pointer">⬆ Importieren <input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
+  <button class="btn btn-secondary" onclick="clearAll()" style="margin-left:auto">🗑 Alles löschen</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ============================================================
+//  STATE
+// ============================================================
+let gasthunde = [];
+let trainingClients = [];
+
+const STORAGE_KEY = 'hundetools_v1';
+
+function save() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ gasthunde, trainingClients }));
+  } catch(e) {}
+}
+
+function load() {
+  try {
+    const d = localStorage.getItem(STORAGE_KEY);
+    if (d) {
+      const p = JSON.parse(d);
+      gasthunde = p.gasthunde || [];
+      trainingClients = p.trainingClients || [];
+    }
+  } catch(e) {}
+}
+
+// ============================================================
+//  TABS
+// ============================================================
+function showTab(id) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['kalender','abrechnung','monatsabrechnung','training'][i] === id));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + id));
+  if (id === 'abrechnung') renderAbrechnung();
+  if (id === 'monatsabrechnung') renderMonatsabrechnung();
+  if (id === 'kalender') renderCalendar();
+}
+
+// ============================================================
+//  GASTHUNDE
+// ============================================================
+const DOG_COLORS = ['#7B2D8B','#e74c3c','#2980b9','#27ae60','#e67e22','#16a085','#8e44ad','#c0392b','#1abc9c','#d35400'];
+
+function addGasthund() {
+  const name = document.getElementById('g-name').value.trim();
+  const rasse = document.getElementById('g-rasse').value.trim();
+  const ein = document.getElementById('g-ein').value;
+  const aus = document.getElementById('g-aus').value;
+  const rate = parseFloat(document.getElementById('g-rate').value) || 0;
+  const farbe = document.getElementById('g-farbe').value;
+
+  if (!name || !ein || !aus) return toast('Name, Einzug und Auszug sind Pflichtfelder!');
+  if (ein >= aus) return toast('Auszug muss nach Einzug liegen!');
+
+  gasthunde.push({ id: Date.now(), name, rasse, ein, aus, rate, farbe, bezahlt: 0 });
+  save();
+  document.getElementById('g-name').value = '';
+  document.getElementById('g-rasse').value = '';
+  renderDogList();
+  renderCalendar();
+  toast('Gasthund hinzugefügt ✓');
+}
+
+function renderDogList() {
+  const el = document.getElementById('dog-list');
+  if (!gasthunde.length) {
+    el.innerHTML = '<p style="color:var(--gray);font-style:italic">Noch keine Gasthunde eingetragen.</p>';
+    return;
+  }
+  el.innerHTML = '<div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Rasse</th><th>Einzug</th><th>Auszug</th><th>Tagessatz</th><th>Farbe</th><th>Aktionen</th></tr></thead><tbody>' +
+    gasthunde.map(d => `<tr>
+      <td><strong>${d.name}</strong></td>
+      <td>${d.rasse||'–'}</td>
+      <td>${fmt(d.ein)}</td>
+      <td>${fmt(d.aus)}</td>
+      <td>€ ${d.rate.toFixed(2)}</td>
+      <td><span style="display:inline-block;width:20px;height:20px;border-radius:50%;background:${d.farbe}"></span></td>
+      <td class="actions">
+        <button class="btn btn-danger" onclick="removeGasthund(${d.id})">✕</button>
+      </td>
+    </tr>`).join('') + '</tbody></table></div>';
+}
+
+function removeGasthund(id) {
+  gasthunde = gasthunde.filter(d => d.id !== id);
+  save();
+  renderDogList();
+  renderCalendar();
+  renderAbrechnung();
+}
+
+// ============================================================
+//  KALENDER
+// ============================================================
+let calYear, calMonth;
+
+function initCalMonth() {
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth();
+  const inp = document.getElementById('cal-month');
+  inp.value = `${calYear}-${String(calMonth+1).padStart(2,'0')}`;
+}
+
+function prevMonth() {
+  calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; }
+  document.getElementById('cal-month').value = `${calYear}-${String(calMonth+1).padStart(2,'0')}`;
+  renderCalendar();
+}
+function nextMonth() {
+  calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; }
+  document.getElementById('cal-month').value = `${calYear}-${String(calMonth+1).padStart(2,'0')}`;
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const val = document.getElementById('cal-month').value;
+  if (val) { [calYear, calMonth] = val.split('-').map(Number); calMonth -= 1; }
+
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const today = new Date().toISOString().slice(0,10);
+  const DAYS = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+
+  let html = '<table class="cal-table"><thead><tr><th>Hund</th>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(calYear, calMonth, d);
+    const dow = date.getDay();
+    const iso = date.toISOString().slice(0,10);
+    const cls = iso === today ? 'today' : (dow===0||dow===6 ? 'weekend' : '');
+    html += `<th class="${cls}">${d}<br><span style="font-size:.65rem">${DAYS[dow]}</span></th>`;
+  }
+  html += '</tr></thead><tbody>';
+
+  const relevant = gasthunde.filter(d => {
+    const ein = new Date(calYear, calMonth, 1);
+    const aus = new Date(calYear, calMonth+1, 0);
+    return new Date(d.ein) <= aus && new Date(d.aus) >= ein;
+  });
+
+  if (!relevant.length) {
+    html += `<tr><td colspan="${daysInMonth+1}" style="text-align:center;color:var(--gray);padding:20px;font-style:italic">Keine Gasthunde in diesem Monat</td></tr>`;
+  } else {
+    relevant.forEach(d => {
+      html += `<tr><td class="dog-label" style="border-left:4px solid ${d.farbe}">${d.name}</td>`;
+      for (let day = 1; day <= daysInMonth; day++) {
+        const iso = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const inStay = iso >= d.ein && iso <= d.aus;
+        const isFirst = iso === d.ein;
+        const isLast = iso === d.aus;
+        const date = new Date(calYear, calMonth, day);
+        const dow = date.getDay();
+        let bg = (dow===0||dow===6) ? '#f5f5f5' : '';
+        if (iso === today) bg = '#fff3cd';
+        if (inStay) {
+          let radius = '';
+          if (isFirst && isLast) radius = 'border-radius:8px';
+          else if (isFirst) radius = 'border-radius:8px 0 0 8px';
+          else if (isLast) radius = 'border-radius:0 8px 8px 0';
+          html += `<td style="background:${bg}"><div style="background:${d.farbe};color:#fff;${radius};padding:2px 0;font-size:.7rem">${isFirst?'▶':isLast?'◀':''}</div></td>`;
+        } else {
+          html += `<td style="background:${bg}"></td>`;
+        }
+      }
+      html += '</tr>';
+    });
+  }
+  html += '</tbody></table>';
+  document.getElementById('cal-grid').innerHTML = html;
+}
+
+// ============================================================
+//  ABRECHNUNG
+// ============================================================
+function tage(ein, aus) {
+  return Math.max(0, Math.round((new Date(aus)-new Date(ein))/(1000*60*60*24)));
+}
+function fmt(iso) {
+  if (!iso) return '–';
+  const [y,m,d] = iso.split('-');
+  return `${d}.${m}.${y}`;
+}
+function status(gesamt, bezahlt) {
+  if (bezahlt >= gesamt) return '<span class="badge badge-bezahlt">✓ Bezahlt</span>';
+  if (bezahlt > 0) return '<span class="badge badge-teilw">~ Teilw.</span>';
+  return '<span class="badge badge-offen">✗ Offen</span>';
+}
+
+function renderAbrechnung() {
+  // metrics
+  const total = gasthunde.reduce((s,d) => s + tage(d.ein,d.aus)*d.rate, 0);
+  const paid = gasthunde.reduce((s,d) => s + (d.bezahlt||0), 0);
+  const offen = total - paid;
+  const active = gasthunde.filter(d => {
+    const t = new Date().toISOString().slice(0,10);
+    return d.ein <= t && d.aus >= t;
+  }).length;
+  document.getElementById('metrics').innerHTML = `
+    <div class="metric"><div class="val" style="color:var(--blue)">${gasthunde.length}</div><div class="lbl">Gasthunde gesamt</div></div>
+    <div class="metric"><div class="val" style="color:var(--purple)">${active}</div><div class="lbl">Aktuell anwesend</div></div>
+    <div class="metric"><div class="val" style="color:var(--blue)">€ ${total.toFixed(2)}</div><div class="lbl">Gesamtumsatz</div></div>
+    <div class="metric"><div class="val" style="color:var(--green)">€ ${paid.toFixed(2)}</div><div class="lbl">Bezahlt</div></div>
+    <div class="metric"><div class="val" style="color:var(--red)">€ ${offen.toFixed(2)}</div><div class="lbl">Offen</div></div>`;
+
+  const body = document.getElementById('abr-body');
+  if (!gasthunde.length) {
+    body.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--gray);padding:20px;font-style:italic">Keine Einträge vorhanden.</td></tr>';
+    return;
+  }
+  body.innerHTML = gasthunde.map(d => {
+    const t = tage(d.ein, d.aus);
+    const gesamt = t * d.rate;
+    const rest = gesamt - (d.bezahlt||0);
+    return `<tr>
+      <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${d.farbe};margin-right:6px"></span><strong>${d.name}</strong></td>
+      <td>${d.rasse||'–'}</td>
+      <td>${fmt(d.ein)}</td>
+      <td>${fmt(d.aus)}</td>
+      <td style="text-align:center">${t}</td>
+      <td style="text-align:right">€ ${d.rate.toFixed(2)}</td>
+      <td style="text-align:right;font-weight:bold">€ ${gesamt.toFixed(2)}</td>
+      <td><input type="number" min="0" step="0.01" value="${d.bezahlt||0}" style="width:90px;text-align:right"
+        onchange="updateBezahlt(${d.id},this.value)"></td>
+      <td style="text-align:right;color:${rest>0?'var(--red)':'var(--green)'}"><strong>€ ${rest.toFixed(2)}</strong></td>
+      <td>${status(gesamt, d.bezahlt||0)}</td>
+      <td><button class="btn btn-danger" onclick="removeGasthund(${d.id})">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function updateBezahlt(id, val) {
+  const d = gasthunde.find(x => x.id === id);
+  if (d) { d.bezahlt = parseFloat(val)||0; save(); renderAbrechnung(); }
+}
+
+// ============================================================
+//  MONATSABRECHNUNG
+// ============================================================
+function renderMonatsabrechnung() {
+  // Build month options
+  const months = [...new Set(gasthunde.map(d => d.aus.slice(0,7)))].sort();
+  const sel = document.getElementById('monat-filter');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="all">Alle Monate</option>' +
+    months.map(m => `<option value="${m}" ${m===cur?'selected':''}>${monthLabel(m)}</option>`).join('');
+
+  const filter = sel.value;
+  const filtered = filter === 'all' ? gasthunde : gasthunde.filter(d => d.aus.slice(0,7) === filter);
+  const grouped = {};
+  filtered.forEach(d => {
+    const key = d.aus.slice(0,7);
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(d);
+  });
+
+  const keys = Object.keys(grouped).sort();
+  let html = '';
+  if (!keys.length) {
+    html = '<div class="card"><p style="color:var(--gray);font-style:italic;text-align:center">Keine Einträge für diesen Zeitraum.</p></div>';
+  }
+  keys.forEach(key => {
+    const dogs = grouped[key];
+    const mTotal = dogs.reduce((s,d) => s + tage(d.ein,d.aus)*d.rate, 0);
+    const mPaid = dogs.reduce((s,d) => s + (d.bezahlt||0), 0);
+    const mRest = mTotal - mPaid;
+    html += `<div class="card month-section">
+      <div class="month-header">${monthLabel(key)} — Gesamt: € ${mTotal.toFixed(2)} | Bezahlt: € ${mPaid.toFixed(2)} | Offen: € ${mRest.toFixed(2)}</div>
+      <div style="overflow-x:auto"><table style="margin-top:0"><thead><tr>
+        <th>Name</th><th>Einzug</th><th>Auszug</th><th>Tage</th><th>Tagessatz</th><th>Gesamt</th><th>Bezahlt</th><th>Rest</th><th>Status</th>
+      </tr></thead><tbody>` +
+      dogs.map(d => {
+        const t = tage(d.ein,d.aus);
+        const g = t*d.rate;
+        const r = g-(d.bezahlt||0);
+        return `<tr>
+          <td><strong>${d.name}</strong></td>
+          <td>${fmt(d.ein)}</td><td>${fmt(d.aus)}</td>
+          <td style="text-align:center">${t}</td>
+          <td style="text-align:right">€ ${d.rate.toFixed(2)}</td>
+          <td style="text-align:right;font-weight:bold">€ ${g.toFixed(2)}</td>
+          <td style="text-align:right">€ ${(d.bezahlt||0).toFixed(2)}</td>
+          <td style="text-align:right;color:${r>0?'var(--red)':'var(--green)'}"><strong>€ ${r.toFixed(2)}</strong></td>
+          <td>${status(g,d.bezahlt||0)}</td>
+        </tr>`;
+      }).join('') +
+      '</tbody></table></div></div>';
+  });
+  document.getElementById('monats-content').innerHTML = html;
+}
+
+function monthLabel(ym) {
+  const [y,m] = ym.split('-');
+  const names = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+  return `${names[parseInt(m)-1]} ${y}`;
+}
+
+// ============================================================
+//  TRAINING
+// ============================================================
+function addTrainingClient() {
+  const name = document.getElementById('t-name').value.trim();
+  if (!name) return toast('Bitte Namen eingeben!');
+  trainingClients.push({ id: Date.now(), name, te: Array(12).fill('') });
+  save();
+  document.getElementById('t-name').value = '';
+  renderTraining();
+  toast('Kunde hinzugefügt ✓');
+}
+
+function renderTraining() {
+  const body = document.getElementById('t-body');
+  const foot = document.getElementById('t-foot');
+
+  if (!trainingClients.length) {
+    body.innerHTML = '<tr><td colspan="16" style="text-align:center;color:var(--gray);padding:20px;font-style:italic">Keine Kunden eingetragen.</td></tr>';
+    foot.innerHTML = '';
+    return;
+  }
+
+  body.innerHTML = trainingClients.map(c => {
+    const done = c.te.filter(t => t.trim()).length;
+    const open = 12 - done;
+    const pct = Math.round(done/12*100);
+    const teInputs = c.te.map((v,i) =>
+      `<td class="te-cell"><input value="${v}" onchange="updateTE(${c.id},${i},this.value)" placeholder=""></td>`
+    ).join('');
+    return `<tr>
+      <td class="name-cell">
+        <div>${c.name}</div>
+        <div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>
+      </td>
+      ${teInputs}
+      <td class="done-cell">${done}</td>
+      <td class="open-cell">${open}</td>
+      <td><button class="btn btn-danger" onclick="removeClient(${c.id})" style="font-size:.75rem;padding:4px 8px">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  const totalDone = trainingClients.reduce((s,c) => s + c.te.filter(t=>t.trim()).length, 0);
+  const totalOpen = trainingClients.length * 12 - totalDone;
+  foot.innerHTML = `<tr class="sum-row"><td>GESAMT (${trainingClients.length} Kunden)</td>
+    <td colspan="12"></td>
+    <td>${totalDone}</td><td>${totalOpen}</td><td></td></tr>`;
+}
+
+function updateTE(id, idx, val) {
+  const c = trainingClients.find(x => x.id === id);
+  if (c) { c.te[idx] = val; save(); renderTraining(); }
+}
+
+function removeClient(id) {
+  trainingClients = trainingClients.filter(c => c.id !== id);
+  save(); renderTraining();
+}
+
+// ============================================================
+//  EXPORT / IMPORT
+// ============================================================
+function exportData() {
+  const data = JSON.stringify({ gasthunde, trainingClients, exportDatum: new Date().toISOString() }, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `hundetools_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Export erfolgreich! ✓');
+}
+
+function importData(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const d = JSON.parse(e.target.result);
+      gasthunde = d.gasthunde || [];
+      trainingClients = d.trainingClients || [];
+      save();
+      renderAll();
+      toast('Import erfolgreich! ✓');
+    } catch(ex) {
+      toast('Fehler beim Importieren!');
+    }
+  };
+  reader.readAsText(file);
+  evt.target.value = '';
+}
+
+function clearAll() {
+  if (!confirm('Wirklich alle Daten löschen?')) return;
+  gasthunde = [];
+  trainingClients = [];
+  save();
+  renderAll();
+  toast('Alle Daten gelöscht.');
+}
+
+function renderAll() {
+  renderDogList();
+  renderCalendar();
+  renderAbrechnung();
+  renderMonatsabrechnung();
+  renderTraining();
+}
+
+// ============================================================
+//  TOAST
+// ============================================================
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ============================================================
+//  INIT
+// ============================================================
+load();
+initCalMonth();
+renderAll();
+</script>
+</body>
+</html>
