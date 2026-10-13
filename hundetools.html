@@ -164,9 +164,8 @@
   <div class="metrics" id="metrics"></div>
 
   <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <h3 style="margin:0">Abrechnungstabelle</h3>
-    </div>
+    <h3>Abrechnungstabelle</h3>
+    <div id="abr-filter-row"></div>
     <div style="overflow-x:auto">
       <table id="abr-table">
         <thead><tr>
@@ -177,6 +176,7 @@
         <tbody id="abr-body"></tbody>
       </table>
     </div>
+    <p style="font-size:.78rem;color:var(--gray);margin-top:10px">💡 Tipp: Mit 📁 wird ein Eintrag archiviert (bleibt in der Statistik erhalten). Endgültig löschen nur über die Gasthunde-Liste im Kalender-Tab.</p>
   </div>
 </div>
 
@@ -288,7 +288,7 @@ function addGasthund() {
   if (!name || !ein || !aus) return toast('Name, Einzug und Auszug sind Pflichtfelder!');
   if (ein >= aus) return toast('Auszug muss nach Einzug liegen!');
 
-  gasthunde.push({ id: Date.now(), name, rasse, ein, aus, rate, farbe, bezahlt: 0 });
+  gasthunde.push({ id: Date.now(), name, rasse, ein, aus, rate, farbe, bezahlt: 0, archiviert: false });
   save();
   document.getElementById('g-name').value = '';
   document.getElementById('g-rasse').value = '';
@@ -303,22 +303,52 @@ function renderDogList() {
     el.innerHTML = '<p style="color:var(--gray);font-style:italic">Noch keine Gasthunde eingetragen.</p>';
     return;
   }
-  el.innerHTML = '<div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Rasse</th><th>Einzug</th><th>Auszug</th><th>Tagessatz</th><th>Farbe</th><th>Aktionen</th></tr></thead><tbody>' +
-    gasthunde.map(d => `<tr>
-      <td><strong>${d.name}</strong></td>
+  const aktive = gasthunde.filter(d => !d.archiviert);
+  const archivierte = gasthunde.filter(d => d.archiviert);
+  const zeigeArchiv = document.getElementById('zeige-archiv')?.checked;
+
+  const renderRows = (liste) => liste.map(d => `<tr style="${d.archiviert ? 'opacity:.55' : ''}">
+      <td><strong>${d.name}</strong>${d.archiviert ? ' <span style="font-size:.72rem;color:var(--gray)">(archiviert)</span>' : ''}</td>
       <td>${d.rasse||'–'}</td>
       <td>${fmt(d.ein)}</td>
       <td>${fmt(d.aus)}</td>
       <td>€ ${d.rate.toFixed(2)}</td>
       <td><span style="display:inline-block;width:20px;height:20px;border-radius:50%;background:${d.farbe}"></span></td>
       <td class="actions">
-        <button class="btn btn-danger" onclick="removeGasthund(${d.id})">✕</button>
+        ${!d.archiviert
+          ? `<button class="btn btn-secondary" title="Archivieren" onclick="archivieren(${d.id})" style="font-size:.75rem;padding:5px 10px">📁 Archiv</button>`
+          : `<button class="btn btn-outline" title="Wiederherstellen" onclick="wiederherstellen(${d.id})" style="font-size:.75rem;padding:5px 10px">↩ Aktiv</button>`
+        }
+        <button class="btn btn-danger" title="Endgültig löschen" onclick="removeGasthund(${d.id})" style="font-size:.75rem;padding:5px 8px">✕</button>
       </td>
-    </tr>`).join('') + '</tbody></table></div>';
+    </tr>`).join('');
+
+  const anzeigeList = zeigeArchiv ? gasthunde : aktive;
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;cursor:pointer">
+        <input type="checkbox" id="zeige-archiv" ${zeigeArchiv?'checked':''} onchange="renderDogList()">
+        Archivierte anzeigen ${archivierte.length ? `(${archivierte.length})` : ''}
+      </label>
+    </div>
+    <div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Rasse</th><th>Einzug</th><th>Auszug</th><th>Tagessatz</th><th>Farbe</th><th>Aktionen</th></tr></thead><tbody>
+    ${anzeigeList.length ? renderRows(anzeigeList) : '<tr><td colspan="7" style="text-align:center;color:var(--gray);padding:12px;font-style:italic">Keine aktiven Gasthunde.</td></tr>'}
+    </tbody></table></div>`;
 }
 
+function archivieren(id) {
+  const d = gasthunde.find(x => x.id === id);
+  if (d) { d.archiviert = true; save(); renderDogList(); renderCalendar(); renderAbrechnung(); toast(`${d.name} archiviert`); }
+}
+function wiederherstellen(id) {
+  const d = gasthunde.find(x => x.id === id);
+  if (d) { d.archiviert = false; save(); renderDogList(); renderCalendar(); renderAbrechnung(); toast(`${d.name} wieder aktiv`); }
+}
 function removeGasthund(id) {
-  gasthunde = gasthunde.filter(d => d.id !== id);
+  const d = gasthunde.find(x => x.id === id);
+  if (!confirm(`"${d?.name}" wirklich endgültig löschen?`)) return;
+  gasthunde = gasthunde.filter(x => x.id !== id);
   save();
   renderDogList();
   renderCalendar();
@@ -368,6 +398,7 @@ function renderCalendar() {
   html += '</tr></thead><tbody>';
 
   const relevant = gasthunde.filter(d => {
+    if (d.archiviert) return false;
     const ein = new Date(calYear, calMonth, 1);
     const aus = new Date(calYear, calMonth+1, 0);
     return new Date(d.ein) <= aus && new Date(d.aus) >= ein;
@@ -407,8 +438,9 @@ function renderCalendar() {
 // ============================================================
 //  ABRECHNUNG
 // ============================================================
+// Einzugstag zählt als voller Tag: 22.09.–07.10. = 16 Tage
 function tage(ein, aus) {
-  return Math.max(0, Math.round((new Date(aus)-new Date(ein))/(1000*60*60*24)));
+  return Math.max(0, Math.round((new Date(aus)-new Date(ein))/(1000*60*60*24)) + 1);
 }
 function fmt(iso) {
   if (!iso) return '–';
@@ -422,45 +454,82 @@ function status(gesamt, bezahlt) {
 }
 
 function renderAbrechnung() {
-  // metrics
-  const total = gasthunde.reduce((s,d) => s + tage(d.ein,d.aus)*d.rate, 0);
-  const paid = gasthunde.reduce((s,d) => s + (d.bezahlt||0), 0);
+  const aktive = gasthunde.filter(d => !d.archiviert);
+  const alle = gasthunde;
+  const zeigeArchivAbr = document.getElementById('zeige-archiv-abr')?.checked;
+  const liste = zeigeArchivAbr ? alle : aktive;
+
+  // metrics — immer alle (inkl. archiviert) für Gesamtumsatz
+  const total = alle.reduce((s,d) => s + tage(d.ein,d.aus)*d.rate, 0);
+  const paid  = alle.reduce((s,d) => s + (d.bezahlt||0), 0);
   const offen = total - paid;
-  const active = gasthunde.filter(d => {
-    const t = new Date().toISOString().slice(0,10);
-    return d.ein <= t && d.aus >= t;
-  }).length;
+  const today = new Date().toISOString().slice(0,10);
+  const active = aktive.filter(d => d.ein <= today && d.aus >= today).length;
+
   document.getElementById('metrics').innerHTML = `
-    <div class="metric"><div class="val" style="color:var(--blue)">${gasthunde.length}</div><div class="lbl">Gasthunde gesamt</div></div>
+    <div class="metric"><div class="val" style="color:var(--blue)">${aktive.length}</div><div class="lbl">Aktive Gasthunde</div></div>
     <div class="metric"><div class="val" style="color:var(--purple)">${active}</div><div class="lbl">Aktuell anwesend</div></div>
     <div class="metric"><div class="val" style="color:var(--blue)">€ ${total.toFixed(2)}</div><div class="lbl">Gesamtumsatz</div></div>
     <div class="metric"><div class="val" style="color:var(--green)">€ ${paid.toFixed(2)}</div><div class="lbl">Bezahlt</div></div>
     <div class="metric"><div class="val" style="color:var(--red)">€ ${offen.toFixed(2)}</div><div class="lbl">Offen</div></div>`;
 
   const body = document.getElementById('abr-body');
-  if (!gasthunde.length) {
+  const archAnz = alle.filter(d=>d.archiviert).length;
+
+  // Filter-Checkbox über der Tabelle
+  document.getElementById('abr-filter-row').innerHTML = `
+    <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;cursor:pointer;margin-bottom:10px">
+      <input type="checkbox" id="zeige-archiv-abr" ${zeigeArchivAbr?'checked':''} onchange="renderAbrechnung()">
+      Archivierte anzeigen ${archAnz ? `(${archAnz})` : ''}
+    </label>`;
+
+  if (!liste.length) {
     body.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--gray);padding:20px;font-style:italic">Keine Einträge vorhanden.</td></tr>';
     return;
   }
-  body.innerHTML = gasthunde.map(d => {
+  body.innerHTML = liste.map(d => {
     const t = tage(d.ein, d.aus);
     const gesamt = t * d.rate;
     const rest = gesamt - (d.bezahlt||0);
-    return `<tr>
-      <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${d.farbe};margin-right:6px"></span><strong>${d.name}</strong></td>
+    const bezahltVoll = (d.bezahlt||0) >= gesamt;
+    return `<tr style="${d.archiviert ? 'opacity:.6' : ''}">
+      <td>
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${d.farbe};margin-right:6px"></span>
+        <strong>${d.name}</strong>${d.archiviert ? ' <span style="font-size:.72rem;color:var(--gray)">(arch.)</span>' : ''}
+      </td>
       <td>${d.rasse||'–'}</td>
       <td>${fmt(d.ein)}</td>
       <td>${fmt(d.aus)}</td>
       <td style="text-align:center">${t}</td>
       <td style="text-align:right">€ ${d.rate.toFixed(2)}</td>
       <td style="text-align:right;font-weight:bold">€ ${gesamt.toFixed(2)}</td>
-      <td><input type="number" min="0" step="0.01" value="${d.bezahlt||0}" style="width:90px;text-align:right"
-        onchange="updateBezahlt(${d.id},this.value)"></td>
+      <td>
+        <input type="number" min="0" step="0.01" value="${d.bezahlt||0}" style="width:90px;text-align:right"
+          onchange="updateBezahlt(${d.id},this.value)">
+        ${!bezahltVoll && !d.archiviert
+          ? `<button class="btn btn-success" title="Als vollständig bezahlt markieren" onclick="alsBezahltMarkieren(${d.id})" style="margin-left:4px;font-size:.75rem;padding:4px 8px">✓ Voll</button>`
+          : ''}
+      </td>
       <td style="text-align:right;color:${rest>0?'var(--red)':'var(--green)'}"><strong>€ ${rest.toFixed(2)}</strong></td>
       <td>${status(gesamt, d.bezahlt||0)}</td>
-      <td><button class="btn btn-danger" onclick="removeGasthund(${d.id})">✕</button></td>
+      <td class="actions">
+        ${!d.archiviert
+          ? `<button class="btn btn-secondary" title="Archivieren" onclick="archivieren(${d.id})" style="font-size:.75rem;padding:4px 8px">📁</button>`
+          : `<button class="btn btn-outline" title="Wiederherstellen" onclick="wiederherstellen(${d.id})" style="font-size:.75rem;padding:4px 8px">↩</button>`
+        }
+      </td>
     </tr>`;
   }).join('');
+}
+
+function alsBezahltMarkieren(id) {
+  const d = gasthunde.find(x => x.id === id);
+  if (!d) return;
+  const t = tage(d.ein, d.aus);
+  d.bezahlt = t * d.rate;
+  save();
+  renderAbrechnung();
+  toast(`${d.name} als vollständig bezahlt markiert ✓`);
 }
 
 function updateBezahlt(id, val) {
@@ -481,6 +550,7 @@ function renderMonatsabrechnung() {
 
   const filter = sel.value;
   const filtered = filter === 'all' ? gasthunde : gasthunde.filter(d => d.aus.slice(0,7) === filter);
+  // Monatsabrechnung zeigt alle inkl. archivierte (für vollständige Abrechnung)
   const grouped = {};
   filtered.forEach(d => {
     const key = d.aus.slice(0,7);
