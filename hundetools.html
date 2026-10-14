@@ -201,17 +201,25 @@
     <h3>Neuen Kunden hinzufügen</h3>
     <div class="form-row">
       <div class="form-group"><label>Kundenname</label><input id="t-name" placeholder="Max Mustermann" style="width:200px"></div>
+      <div class="form-group"><label>Kartentyp</label>
+        <select id="t-kartentyp">
+          <option value="0">Einzelstunden (kein Limit)</option>
+          <option value="6">6er-Karte</option>
+          <option value="12">12er-Karte</option>
+        </select>
+      </div>
       <div class="form-group"><label>&nbsp;</label><button class="btn btn-primary" onclick="addTrainingClient()">+ Hinzufügen</button></div>
     </div>
   </div>
 
   <div class="card">
     <h3>Trainingseinheiten</h3>
+    <div id="t-filter-row" style="margin-bottom:10px"></div>
     <p style="font-size:.82rem;color:var(--gray);margin-bottom:10px">Daten im Format TT.MM.JJJJ eintragen. Abgeschlossen und Offen werden automatisch berechnet.</p>
     <div class="training-grid">
       <table class="t-table" id="t-table">
         <thead><tr>
-          <th style="text-align:left;min-width:150px">Kundenname</th>
+          <th style="text-align:left;min-width:170px">Kundenname</th>
           <th>TE 1</th><th>TE 2</th><th>TE 3</th><th>TE 4</th><th>TE 5</th><th>TE 6</th>
           <th>TE 7</th><th>TE 8</th><th>TE 9</th><th>TE 10</th><th>TE 11</th><th>TE 12</th>
           <th style="background:#5e2270">Abgeschl.</th>
@@ -255,8 +263,8 @@ function load() {
     const d = localStorage.getItem(STORAGE_KEY);
     if (d) {
       const p = JSON.parse(d);
-      gasthunde = p.gasthunde || [];
-      trainingClients = p.trainingClients || [];
+      gasthunde = (p.gasthunde || []).map(g => ({ archiviert: false, bezahlt: 0, ...g }));
+      trainingClients = (p.trainingClients || []).map(c => ({ archiviert: false, kartentyp: 0, ...c }));
     }
   } catch(e) {}
 }
@@ -604,58 +612,124 @@ function monthLabel(ym) {
 // ============================================================
 function addTrainingClient() {
   const name = document.getElementById('t-name').value.trim();
+  const kartentyp = parseInt(document.getElementById('t-kartentyp').value) || 0;
   if (!name) return toast('Bitte Namen eingeben!');
-  trainingClients.push({ id: Date.now(), name, te: Array(12).fill('') });
+  trainingClients.push({ id: Date.now(), name, kartentyp, te: Array(12).fill(''), archiviert: false });
   save();
   document.getElementById('t-name').value = '';
   renderTraining();
   toast('Kunde hinzugefügt ✓');
 }
 
+function archivierenClient(id) {
+  const c = trainingClients.find(x => x.id === id);
+  if (c) { c.archiviert = true; save(); renderTraining(); toast(`${c.name} archiviert`); }
+}
+function wiederherstellenClient(id) {
+  const c = trainingClients.find(x => x.id === id);
+  if (c) { c.archiviert = false; save(); renderTraining(); toast(`${c.name} wieder aktiv`); }
+}
+function removeClient(id) {
+  const c = trainingClients.find(x => x.id === id);
+  if (!confirm(`"${c?.name}" wirklich endgültig löschen?`)) return;
+  trainingClients = trainingClients.filter(x => x.id !== id);
+  save(); renderTraining();
+}
+
+function setKartentyp(id, val) {
+  const c = trainingClients.find(x => x.id === id);
+  if (c) { c.kartentyp = parseInt(val)||0; save(); renderTraining(); toast('Kartentyp gespeichert ✓'); }
+}
+
 function renderTraining() {
   const body = document.getElementById('t-body');
   const foot = document.getElementById('t-foot');
+  const filterRow = document.getElementById('t-filter-row');
 
-  if (!trainingClients.length) {
+  const zeigeArchivT = document.getElementById('zeige-archiv-t')?.checked;
+  const aktive = trainingClients.filter(c => !c.archiviert);
+  const archivierte = trainingClients.filter(c => c.archiviert);
+  const anzeigeList = zeigeArchivT ? trainingClients : aktive;
+  // alphabetisch sortieren
+  const sorted = [...anzeigeList].sort((a,b) => a.name.localeCompare(b.name, 'de'));
+
+  filterRow.innerHTML = `<label style="display:flex;align-items:center;gap:6px;font-size:.85rem;cursor:pointer">
+    <input type="checkbox" id="zeige-archiv-t" ${zeigeArchivT?'checked':''} onchange="renderTraining()">
+    Archivierte anzeigen ${archivierte.length ? `(${archivierte.length})` : ''}
+  </label>`;
+
+  if (!sorted.length) {
     body.innerHTML = '<tr><td colspan="16" style="text-align:center;color:var(--gray);padding:20px;font-style:italic">Keine Kunden eingetragen.</td></tr>';
     foot.innerHTML = '';
     return;
   }
 
-  body.innerHTML = trainingClients.map(c => {
-    const done = c.te.filter(t => t.trim()).length;
-    const open = 12 - done;
-    const pct = Math.round(done/12*100);
-    const teInputs = c.te.map((v,i) =>
-      `<td class="te-cell"><input value="${v}" onchange="updateTE(${c.id},${i},this.value)" placeholder=""></td>`
-    ).join('');
-    return `<tr>
+  body.innerHTML = sorted.map(c => {
+    // Kartentyp: 0=unbegrenzt, 6=6er, 12=12er
+    const kt = c.kartentyp || 0;
+    const limit = kt > 0 ? kt : 12;
+    const done = c.te.slice(0, limit).filter(t => t.trim()).length;
+    const open = kt > 0 ? Math.max(0, kt - done) : 12 - c.te.filter(t=>t.trim()).length;
+    const pct = kt > 0 ? Math.round(done/kt*100) : Math.round(c.te.filter(t=>t.trim()).length/12*100);
+
+    // Kartentyp Badge
+    let ktBadge = '';
+    if (kt === 6) ktBadge = `<span style="font-size:.7rem;background:#e8d5f0;color:#7B2D8B;border-radius:10px;padding:1px 7px;margin-left:4px;font-weight:bold">6er</span>`;
+    else if (kt === 12) ktBadge = `<span style="font-size:.7rem;background:#d4edda;color:#28a745;border-radius:10px;padding:1px 7px;margin-left:4px;font-weight:bold">12er</span>`;
+
+    // Kartentyp ändern inline
+    const ktSelect = `<select style="font-size:.72rem;padding:1px 4px;border:1px solid #ccc;border-radius:4px;margin-top:3px" onchange="setKartentyp(${c.id},this.value)">
+      <option value="0" ${kt===0?'selected':''}>Einzeln</option>
+      <option value="6" ${kt===6?'selected':''}>6er-Karte</option>
+      <option value="12" ${kt===12?'selected':''}>12er-Karte</option>
+    </select>`;
+
+    // Fortschrittsanzeige: bei Karte "done/limit TE"
+    const progLabel = kt > 0 ? `${done}/${kt} TE` : '';
+
+    // Karte voll? → Zeile grün markieren
+    const karteVoll = kt > 0 && done >= kt;
+    const rowStyle = c.archiviert ? 'opacity:.55' : (karteVoll ? 'background:#d4edda' : '');
+
+    // TE-Felder: bei 6er-Karte nur TE1-6 aktiv, 7-12 deaktiviert
+    const teInputs = c.te.map((v,i) => {
+      const disabled = kt > 0 && i >= kt;
+      return `<td class="te-cell" style="${disabled?'background:#f0f0f0':''}">${disabled
+        ? ''
+        : `<input value="${v}" onchange="updateTE(${c.id},${i},this.value)" placeholder="">`
+      }</td>`;
+    }).join('');
+
+    return `<tr style="${rowStyle}">
       <td class="name-cell">
-        <div>${c.name}</div>
-        <div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>
+        <div>${c.name}${ktBadge}${c.archiviert ? ' <span style="font-size:.7rem;color:var(--gray)">(arch.)</span>' : ''}${karteVoll ? ' <span style="font-size:.7rem;color:var(--green);font-weight:bold">✓ Karte voll</span>' : ''}</div>
+        ${ktSelect}
+        <div class="prog-bar" style="margin-top:4px"><div class="prog-fill" style="width:${pct}%"></div></div>
+        ${progLabel ? `<div style="font-size:.7rem;color:var(--purple);margin-top:1px">${progLabel}</div>` : ''}
       </td>
       ${teInputs}
       <td class="done-cell">${done}</td>
       <td class="open-cell">${open}</td>
-      <td><button class="btn btn-danger" onclick="removeClient(${c.id})" style="font-size:.75rem;padding:4px 8px">✕</button></td>
+      <td class="actions">
+        ${!c.archiviert
+          ? `<button class="btn btn-secondary" title="Archivieren" onclick="archivierenClient(${c.id})" style="font-size:.72rem;padding:4px 8px">📁</button>`
+          : `<button class="btn btn-outline" title="Wiederherstellen" onclick="wiederherstellenClient(${c.id})" style="font-size:.72rem;padding:4px 8px">↩</button>`
+        }
+        <button class="btn btn-danger" onclick="removeClient(${c.id})" style="font-size:.72rem;padding:4px 7px">✕</button>
+      </td>
     </tr>`;
   }).join('');
 
-  const totalDone = trainingClients.reduce((s,c) => s + c.te.filter(t=>t.trim()).length, 0);
-  const totalOpen = trainingClients.length * 12 - totalDone;
-  foot.innerHTML = `<tr class="sum-row"><td>GESAMT (${trainingClients.length} Kunden)</td>
+  const totalDone = aktive.reduce((s,c) => s + c.te.filter(t=>t.trim()).length, 0);
+  const totalKunden = aktive.length;
+  foot.innerHTML = `<tr class="sum-row"><td>GESAMT (${totalKunden} aktive Kunden)</td>
     <td colspan="12"></td>
-    <td>${totalDone}</td><td>${totalOpen}</td><td></td></tr>`;
+    <td>${totalDone}</td><td></td><td></td></tr>`;
 }
 
 function updateTE(id, idx, val) {
   const c = trainingClients.find(x => x.id === id);
   if (c) { c.te[idx] = val; save(); renderTraining(); }
-}
-
-function removeClient(id) {
-  trainingClients = trainingClients.filter(c => c.id !== id);
-  save(); renderTraining();
 }
 
 // ============================================================
